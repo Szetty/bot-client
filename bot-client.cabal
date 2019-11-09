@@ -1,4 +1,4 @@
-name:           bot-server
+name:           bot-client
 version:        0.1.0.0
 synopsis:       Auto-generated bot-server API Client
 description:    .
@@ -31,7 +31,7 @@ executable exampleBot
   ghc-options: -Wall -funbox-strict-fields
   build-depends:
     base >=4.7 && <5.0
-    , bot-server
+    , bot-client
     , text >=0.11 && <1.3
   default-language: Haskell2010
   main-is: ExampleBot.hs
