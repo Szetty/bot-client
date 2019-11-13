@@ -108,6 +108,7 @@ data HelloRequestGame = HelloRequestGame
   { name :: GameName
   , connectionToken :: Text
   , numberOfTotalPlayers :: Maybe Int
+  , totalRounds :: Maybe Int
   } deriving (P.Show, P.Eq, P.Typeable, Generic)
   
 instance A.FromJSON HelloRequestGame

@@ -18,4 +18,4 @@ data MutableState = MutableState {
 
 instance ToJSON MutableState
 
-type Strategy = (MutableState -> Move)
+type Strategy = (MutableState -> IO Move)

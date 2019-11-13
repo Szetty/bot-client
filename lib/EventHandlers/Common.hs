@@ -8,7 +8,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE NumericUnderscores #-}
 
-module EventHandler where
+module EventHandlers.Common where
 
 import BotServer.API
 import BotServer.Model
@@ -17,17 +17,13 @@ import BotClientState
 import Prelude
 import Data.Text(Text, pack)
 import qualified Data.Map as Map
+import Control.Monad(join)
 import Control.Monad.Trans.Reader (ReaderT, ask, runReaderT)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.STM (STM, atomically)
 import Control.Concurrent.STM.TVar
 import Control.Concurrent (MVar, forkIO, newEmptyMVar, putMVar, takeMVar, threadDelay)
 import Network.HTTP.Client(Manager)
-import Network.Wai.Handler.Warp (run)
-import Servant
-
-eventCallback :: Int -> Text
-eventCallback port = pack $ "http://localhost:" ++ show port ++ "/notify"
 
 data GameConfig = GameConfig {
     gameId :: Text
@@ -44,20 +40,6 @@ data State = State {
     , shutdownMVar :: MVar ()
 }
 
-type AppM = ReaderT State Handler
-
-type EventAPI = "notify" :> ReqBody '[JSON] Event :> PostNoContent '[JSON] NoContent
-type StateAPI = "getState" :> Get '[JSON] MutableState
-type API = EventAPI :<|> StateAPI
-
-runEventServer :: GameConfig -> Strategy -> Manager -> BotServerConfig -> Int -> IO ()
-runEventServer gameConfig strategy manager config port = do
-    shutdownMVar <- newEmptyMVar
-    mutableState <- liftIO $ atomically $ newTVar MutableState {currentRound = 0, history = Map.empty}
-    _ <- forkIO $ run port $ app $ initialState gameConfig strategy manager config mutableState shutdownMVar
-    takeMVar shutdownMVar
-    threadDelay 1_000_000
-
 initialState :: GameConfig -> Strategy -> Manager -> BotServerConfig -> TVar MutableState -> MVar () -> State
 initialState gameConfig strategy manager config mutableState shutdownMVar =
     State{
@@ -69,58 +51,27 @@ initialState gameConfig strategy manager config mutableState shutdownMVar =
         shutdownMVar = shutdownMVar
     }
 
-api :: Proxy API
-api = Proxy
-
-nt :: State -> AppM a -> Handler a
-nt s x = runReaderT x s
-
-app :: State -> Application
-app s = serve api $ hoistServer api (nt s) server
-
-server :: ServerT API AppM
-server = notify :<|> getState
-    where notify :: Event -> AppM NoContent
-          notify event = do
-            liftIO $ print event
-            state <- ask
-            let State {shutdownMVar, mutableState = mState} = state
-            liftIO $ do
-                moveOrMsg <- atomically $ updateMutableState state mState event
-                case moveOrMsg of
-                    Left (currentRound, move) -> makeMove state currentRound move
-                    Right msg -> do 
-                        putMVar shutdownMVar ()
-                        print msg
-            return NoContent
-          getState :: AppM MutableState
-          getState = do
-            State{mutableState} <- ask
-            liftIO $ readTVarIO mutableState
-
-updateMutableState :: State -> TVar MutableState -> Event -> STM (Either (Int, Move) Text)
+updateMutableState :: State -> TVar MutableState -> Event -> STM (Either Int Text)
 updateMutableState state mState event = do
     mutableState <- readTVar mState
     let stateEither = handleEvent state mutableState event
     case stateEither of
-        Left (newMutableState, move) -> do
+        Left newMutableState -> do
             let MutableState {currentRound} = newMutableState
             writeTVar mState newMutableState
-            return $ Left (currentRound, move)
+            return $ Left currentRound
         Right message ->
             return $ Right message
 
-handleEvent :: State -> MutableState -> Event -> Either (MutableState, Move) Text
+handleEvent :: State -> MutableState -> Event -> Either MutableState Text
 handleEvent state mutableState event =
     case event of
-        StartGame StartGameBody {nextRound} -> do
-            let State{strategy} = state
-            Left $ updateStateAndGetMove mutableState strategy nextRound
+        StartGame StartGameBody {nextRound} ->
+            Left (mutableState {currentRound = nextRound} :: MutableState)
         RoundFinished RoundFinishedBody {currentRound, nextRound, roundResult = RoundFinishedRoundResult{moves}} -> do
             let MutableState{history} = mutableState
-            let State{strategy} = state
             let updatedHistory = updateHistory state history currentRound moves
-            Left $ updateStateAndGetMove mutableState{history = updatedHistory} strategy nextRound
+            Left (mutableState {currentRound = nextRound} :: MutableState)
         GameFinished GameFinishedBody {score, gameResult = GameFinishedGameResult{winner}} -> 
             Right $ pack $ "The score is " ++ show score ++ " and the winner is " ++ show winner
 
@@ -136,11 +87,9 @@ updateHistory state history currentRound movesMaybe = do
             Map.update (\moves -> Just (moves ++ movesWithoutOwnMove)) currentRound history
         Nothing -> 
             history
-    
 
-updateStateAndGetMove :: MutableState -> Strategy -> Int -> (MutableState, Move)
-updateStateAndGetMove mutableState strategy currentRound = do
-    let MutableState {history} = mutableState
-    let move = strategy mutableState
-    let updatedHistory = Map.insert currentRound [move] history
-    (MutableState{history = updatedHistory, currentRound = currentRound}, move)
+computeMove :: TVar MutableState -> Strategy -> IO Move
+computeMove mState strategy=
+    join $ atomically $ do
+        mutableState <- readTVar mState
+        return $ strategy mutableState

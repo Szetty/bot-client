@@ -26,7 +26,9 @@ module BotServer
   , module BotServer.ModelLens
   , playWithStrategy
   , ConnectionConfig (..)
-  , MutableState
+  , MutableState (..)
+  , BotServer.GameConfig (..)
+  , ConnectionType (..)
   , Strategy
   ) where
 
@@ -38,7 +40,7 @@ import BotServer.MimeTypes
 import BotServer.Model
 import BotServer.ModelLens
 import BotClientState
-import EventHandler
+import EventHandlers
 import Prelude
 import Data.Text(Text)
 import Network.HTTP.Client(newManager, defaultManagerSettings)
@@ -48,17 +50,28 @@ data ConnectionConfig = ConnectionConfig {
   token :: Text
   , clientPort :: Int
   , serverAddress :: String
+  , connectionType :: ConnectionType
 }
 
-playWithStrategy :: GameName -> Text -> Strategy -> ConnectionConfig -> IO ()
-playWithStrategy gameName playerName strategy ConnectionConfig {token, clientPort, serverAddress} = do
+data ConnectionType = WS | HTTP
+
+data GameConfig = GameConfig {
+  name :: GameName
+  , totalRounds :: Maybe Int
+}
+
+playWithStrategy :: BotServer.GameConfig -> Text -> Strategy -> ConnectionConfig -> IO ()
+playWithStrategy BotServer.GameConfig{name, totalRounds} playerName strategy ConnectionConfig {token, clientPort, serverAddress, connectionType} = do
   mgr <- newManager defaultManagerSettings
   config <- withStdoutLogging =<< newConfig (L.pack serverAddress)
-  helloEither <- connect mgr config gameName playerName (EventHandler.eventCallback clientPort) token
+  helloEither <- connect mgr config name totalRounds playerName (EventHandlers.eventCallback clientPort) token
   let connectEither = fmap (\
                           HelloResponse{gameId, player = HelloResponsePlayer{id = playerId, name}} -> 
-                            GameConfig{gameId = gameId, playerId = playerId, playerName = name}
+                            EventHandlers.GameConfig{gameId = gameId, playerId = playerId, playerName = name}
                         ) helloEither
   case connectEither of
       Left msg -> print msg
-      Right gameConfig -> runEventServer gameConfig strategy mgr config clientPort
+      Right gameConfig -> 
+        case connectionType of
+          HTTP -> runHTTPEventServer gameConfig strategy mgr config clientPort
+          WS -> runWSEventServer gameConfig strategy mgr config clientPort
