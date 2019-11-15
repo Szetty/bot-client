@@ -35,7 +35,7 @@ import Data.Text(Text)
 import Data.Aeson(decode)
 import Data.Maybe
 
-connect :: Manager -> BotServerConfig -> GameName -> Maybe Int -> Text -> Text -> Text -> IO (Either Text HelloResponse)
+connect :: Manager -> BotServerConfig -> GameName -> Maybe Int -> Text -> Maybe Text -> Text -> IO (Either Text HelloResponse)
 connect mgr config gameName totalRounds playerName eventCallback connectionToken = do
   let helloRequestGame = HelloRequestGame{name = gameName, connectionToken = connectionToken, numberOfTotalPlayers = Nothing, totalRounds = totalRounds}
   let connectRequest = helloPost HelloRequest{game = helloRequestGame, eventCallback = eventCallback, playerName = Just playerName}

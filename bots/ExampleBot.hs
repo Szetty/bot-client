@@ -1,24 +1,31 @@
-{-# LANGUAGE OverloadedLabels #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE AllowAmbiguousTypes   #-}
+{-# LANGUAGE ConstraintKinds       #-}
+{-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE DataKinds     #-}
-{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE OverloadedLabels      #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE TypeOperators         #-}
 
-import BotServer
-import Data.Text()
+import           BotServer
+import           Data.Text ()
 
 connectionConfig :: ConnectionConfig
-connectionConfig = ConnectionConfig {
-    token = "connectionToken2",
-    clientPort = 9000,
-    serverAddress = "http://localhost:8090",
-    connectionType = WS
-}
+connectionConfig =
+  ConnectionConfig
+    { token = "connectionToken2"
+    , serverAddress = "http://localhost:8090"
+    , connectionType = WS
+    }
+
+playerConfig :: PlayerConfig
+playerConfig =
+  PlayerConfig {playerName = "ExampleBot", strategy = Main.strategy}
+
+gameConfig :: GameConfig
+gameConfig = GameConfig {name = RPS, totalRounds = Nothing}
 
 main :: IO ()
-main = playWithStrategy GameConfig {name = RPS, totalRounds = Nothing} "ExampleBot" strategy connectionConfig
+main = playWithStrategy gameConfig playerConfig connectionConfig
 
 strategy :: MutableState -> IO Move
 strategy _state = return $ RPSMove RockPaperScissorsMove {value = EValueRock}

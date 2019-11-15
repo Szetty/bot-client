@@ -28,9 +28,6 @@ import Network.HTTP.Client(Manager)
 import Network.Wai.Handler.Warp (run)
 import Servant
 
-eventCallback :: Int -> Text
-eventCallback port = pack $ "http://localhost:" ++ show port ++ "/notify"
-
 type AppM = ReaderT State Handler
 
 type EventAPI = "notify" :> ReqBody '[JSON] Event :> PostNoContent '[JSON] NoContent

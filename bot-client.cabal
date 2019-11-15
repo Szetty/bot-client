@@ -83,7 +83,6 @@ library
       BotServer.Logging
       BotServer.MimeTypes
       BotServer.Model
-      BotServer.ModelLens
       EventHandlers
       EventHandlers.HTTP
       EventHandlers.WS

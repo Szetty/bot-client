@@ -23,11 +23,11 @@ module BotServer
   , module BotServer.Logging
   , module BotServer.MimeTypes
   , module BotServer.Model
-  , module BotServer.ModelLens
   , playWithStrategy
   , ConnectionConfig (..)
   , MutableState (..)
   , BotServer.GameConfig (..)
+  , PlayerConfig (..)
   , ConnectionType (..)
   , Strategy
   ) where
@@ -38,7 +38,6 @@ import BotServer.Core
 import BotServer.Logging
 import BotServer.MimeTypes
 import BotServer.Model
-import BotServer.ModelLens
 import BotClientState
 import EventHandlers
 import Prelude
@@ -48,23 +47,27 @@ import qualified Data.Text.Lazy as L
 
 data ConnectionConfig = ConnectionConfig {
   token :: Text
-  , clientPort :: Int
   , serverAddress :: String
   , connectionType :: ConnectionType
 }
 
-data ConnectionType = WS | HTTP
+data ConnectionType = WS | HTTP { eventCallback :: Text, clientPort :: Int }
 
 data GameConfig = GameConfig {
   name :: GameName
   , totalRounds :: Maybe Int
 }
 
-playWithStrategy :: BotServer.GameConfig -> Text -> Strategy -> ConnectionConfig -> IO ()
-playWithStrategy BotServer.GameConfig{name, totalRounds} playerName strategy ConnectionConfig {token, clientPort, serverAddress, connectionType} = do
+data PlayerConfig = PlayerConfig {
+  playerName :: Text
+  , strategy :: Strategy
+}
+
+playWithStrategy :: BotServer.GameConfig -> PlayerConfig -> ConnectionConfig -> IO ()
+playWithStrategy BotServer.GameConfig{name, totalRounds} PlayerConfig{playerName, strategy} ConnectionConfig {token, serverAddress, connectionType} = do
   mgr <- newManager defaultManagerSettings
   config <- withStdoutLogging =<< newConfig (L.pack serverAddress)
-  helloEither <- connect mgr config name totalRounds playerName (EventHandlers.eventCallback clientPort) token
+  helloEither <- connect mgr config name totalRounds playerName (getEventCallback connectionType) token
   let connectEither = fmap (\
                           HelloResponse{gameId, player = HelloResponsePlayer{id = playerId, name}} -> 
                             EventHandlers.GameConfig{gameId = gameId, playerId = playerId, playerName = name}
@@ -73,5 +76,9 @@ playWithStrategy BotServer.GameConfig{name, totalRounds} playerName strategy Con
       Left msg -> print msg
       Right gameConfig -> 
         case connectionType of
-          HTTP -> runHTTPEventServer gameConfig strategy mgr config clientPort
-          WS -> runWSEventServer gameConfig strategy mgr config clientPort
+          HTTP {clientPort} -> runHTTPEventServer gameConfig strategy mgr config clientPort
+          WS -> runWSEventServer gameConfig strategy mgr config
+
+getEventCallback :: ConnectionType -> Maybe Text
+getEventCallback WS = Nothing
+getEventCallback HTTP {eventCallback} = Just eventCallback

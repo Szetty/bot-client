@@ -96,7 +96,7 @@ instance A.ToJSON GameFinishedGameResult
 data HelloRequest = HelloRequest
   { game :: HelloRequestGame
   , playerName :: Maybe Text
-  , eventCallback :: Text
+  , eventCallback :: Maybe Text
   } deriving (P.Show, P.Eq, P.Typeable, Generic)
 
 instance A.FromJSON HelloRequest

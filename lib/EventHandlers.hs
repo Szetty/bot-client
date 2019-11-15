@@ -4,6 +4,6 @@ module EventHandlers
     , module EventHandlers.Common
     ) where
 
-import EventHandlers.HTTP (runHTTPEventServer, eventCallback)
+import EventHandlers.HTTP (runHTTPEventServer)
 import EventHandlers.WS (runWSEventServer)
 import EventHandlers.Common (GameConfig (..))

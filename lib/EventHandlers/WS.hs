@@ -35,8 +35,8 @@ import Network.HTTP.Client(Manager)
 import Data.List(stripPrefix)
 import Data.Aeson(decode)
 
-runWSEventServer :: GameConfig -> Strategy -> Manager -> BotServerConfig -> Int -> IO ()
-runWSEventServer gameConfig strategy manager config port = do
+runWSEventServer :: GameConfig -> Strategy -> Manager -> BotServerConfig -> IO ()
+runWSEventServer gameConfig strategy manager config = do
     let GameConfig {gameId, playerId} = gameConfig
     let BotServerConfig {configHost} = config
     shutdownMVar <- newEmptyMVar
